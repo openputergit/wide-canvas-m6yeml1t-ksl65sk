@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hello Kitty Text Scanner</title>
+    <script src="https://unpkg.com/tesseract.js@v2.1.0/dist/tesseract.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Varela+Round&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Varela Round', sans-serif;
+            background-color: #fff5f7;
+            background-image: radial-gradient(#ff69b420 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+        .kitty-gradient {
+            background: linear-gradient(135deg, #ff69b4, #ff99cc);
+        }
+        .loader {
+            border-top-color: #ff69b4;
+            animation: spinner 1.5s linear infinite;
+        }
+        @keyframes spinner {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .bounce-in {
+            animation: bounceIn 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+        }
+        @keyframes bounceIn {
+            0% { transform: scale(0.3); opacity: 0; }
+            50% { transform: scale(1.05); }
+            70% { transform: scale(0.9); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .fade-in {
+            animation: fadeIn 0.3s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        .kitty-shadow {
+            box-shadow: 0 8px 24px rgba(255, 105, 180, 0.15);
+        }
+        .verified-badge {
+            background: linear-gradient(45deg, #ff69b4, #ff99cc);
+        }
+    </style>
+</head>
+<body class="min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <div class="max-w-4xl mx-auto">
+            <div class="text-center mb-8">
+                <h1 class="text-4xl font-bold text-pink-500 flex items-center justify-center gap-3 mb-2">
+                    <i class="bi bi-camera-fill"></i> 
+                    Hello Kitty Scanner
+                </h1>
+                <p class="text-pink-400">✨ Magical Text Recognition ✨</p>
+            </div>
+
+            <div class="grid md:grid-cols-2 gap-6">
+                <div class="bg-white rounded-3xl kitty-shadow p-6 border-4 border-pink-200">
+                    <div class="flex flex-col items-center space-y-4">
+                        <div class="relative w-full">
+                            <video id="video" class="w-full h-72 bg-pink-50 rounded-2xl object-cover hidden"></video>
+                            <canvas id="canvas" class="hidden"></canvas>
+                            <div id="camera-placeholder" class="w-full h-72 bg-pink-50 rounded-2xl flex items-center justify-center">
+                                <i class="bi bi-camera text-6xl text-pink-300"></i>
+                            </div>
+                        </div>
+                        
+                        <div class="flex gap-3">
+                            <button id="startCamera" class="kitty-gradient text-white px-6 py-3 rounded-full hover:opacity-90 transition-all flex items-center gap-2 transform hover:scale-105">
+                                <i class="bi bi-camera-fill"></i>Start Camera
+                            </button>
+                            <button id="capture" class="hidden kitty-gradient text-white px-6 py-3 rounded-full hover:opacity-90 transition-all flex items-center gap-2 transform hover:scale-105">
+                                <i class="bi bi-camera"></i>Capture
+                            </button>
+                            <button id="switchCamera" class="hidden kitty-gradient text-white p-3 rounded-full hover:opacity-90 transition-all transform hover:scale-105">
+                                <i class="bi bi-arrow-repeat"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="result" class="mt-6 hidden">
+                        <div id="loader" class="hidden">
+                            <div class="loader h-10 w-10 rounded-full border-4 border-pink-200 mx-auto"></div>
+                            <p class="text-center mt-4 text-pink-500">Reading with Hello Kitty magic... 🎀</p>
+                        </div>
+                        <div id="successMessage" class="hidden bounce-in bg-green-100 border border-green-400 text-green-700 px-6 py-4 rounded-full relative mb-4">
+                            <span class="flex items-center justify-center gap-2">
+                                <i class="bi bi-check-circle-fill"></i>
+                                Text extracted successfully!
+                            </span>
+                        </div>
+                        <div id="textResult" class="bg-pink-50 p-6 rounded-2xl text-gray-700 min-h-[120px] fade-in"></div>
+                        <button id="saveToHistory" class="hidden mt-4 kitty-gradient text-white px-6 py-3 rounded-full hover:opacity-90 transition-all w-full flex items-center justify-center gap-2 transform hover:scale-105">
+                            <i class="bi bi-heart-fill"></i>Save to Memory
+                        </button>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-3xl kitty-shadow p-6 border-4 border-pink-200">
+                    <h2 class="text-2xl font-bold mb-6 text-pink-500 flex items-center gap-2">
+                        <i class="bi bi-bookmark-heart-fill"></i>
+                        Kitty's Memory Box
+                    </h2>
+                    <div id="historyPanel" class="space-y-4 max-h-[600px] overflow-y-auto pr-2"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const startButton = document.getElementById('startCamera');
+        const captureButton = document.getElementById('capture');
+        const switchButton = document.getElementById('switchCamera');
+        const result = document.getElementById('result');
+        const loader = document.getElementById('loader');
+        const textResult = document.getElementById('textResult');
+        const successMessage = document.getElementById('successMessage');
+        const saveToHistory = document.getElementById('saveToHistory');
+        const historyPanel = document.getElementById('historyPanel');
+        const cameraPlaceholder = document.getElementById('camera-placeholder');
+
+        let currentStream = null;
+        let facingMode = 'environment';
+        let extractionHistory = JSON.parse(localStorage.getItem('textExtractionHistory') || '[]');
+
+        function updateHistory() {
+            historyPanel.innerHTML = '';
+            extractionHistory.forEach((item, index) => {
+                const historyItem = document.createElement('div');
+                historyItem.className = 'bg-pink-50 p-4 rounded-2xl relative bounce-in mb-4 border-2 border-pink-100';
+                historyItem.innerHTML = `
+                    <div class="flex items-start justify-between mb-2">
+                        <div class="flex items-center gap-2">
+                            <span class="verified-badge text-white px-2 py-1 rounded-full text-xs flex items-center gap-1">
+                                <i class="bi bi-check-circle-fill"></i> Verified
+                            </span>
+                            <span class="text-sm text-pink-400">${new Date(item.timestamp).toLocaleString()}</span>
+                        </div>
+                        <button onclick="deleteHistoryItem(${index})" class="text-pink-400 hover:text-pink-600 p-1">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                    <p class="text-gray-700 break-words">${item.text}</p>
+                `;
+                historyPanel.appendChild(historyItem);
+            });
+        }
+
+        function deleteHistoryItem(index) {
+            extractionHistory.splice(index, 1);
+            localStorage.setItem('textExtractionHistory', JSON.stringify(extractionHistory));
+            updateHistory();
+        }
+
+        async function startCamera() {
+            if (currentStream) {
+                currentStream.getTracks().forEach(track => track.stop());
+            }
+            try {
+                currentStream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: facingMode }
+                });
+                video.srcObject = currentStream;
+                await video.play();
+                video.classList.remove('hidden');
+                cameraPlaceholder.classList.add('hidden');
+                startButton.classList.add('hidden');
+                captureButton.classList.remove('hidden');
+                switchButton.classList.remove('hidden');
+            } catch (err) {
+                console.error('Error:', err);
+                alert('Please enable camera access to use this feature! 📸');
+            }
+        }
+
+        updateHistory();
+
+        startButton.addEventListener('click', startCamera);
+
+        switchButton.addEventListener('click', () => {
+            facingMode = facingMode === 'environment' ? 'user' : 'environment';
+            startCamera();
+        });
+
+        captureButton.addEventListener('click', () => {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            canvas.getContext('2d').drawImage(video, 0, 0);
+            
+            result.classList.remove('hidden');
+            loader.classList.remove('hidden');
+            successMessage.classList.add('hidden');
+            saveToHistory.classList.add('hidden');
+            textResult.innerHTML = '';
+
+            if (currentStream) {
+                currentStream.getTracks().forEach(track => track.stop());
+            }
+            video.classList.add('hidden');
+            cameraPlaceholder.classList.remove('hidden');
+            captureButton.classList.add('hidden');
+            switchButton.classList.add('hidden');
+            startButton.classList.remove('hidden');
+
+            Tesseract.recognize(
+                canvas,
+                'eng',
+                { logger: m => console.log(m) }
+            ).then(({ data: { text } }) => {
+                loader.classList.add('hidden');
+                if (text.trim()) {
+                    successMessage.classList.remove('hidden');
+                    textResult.innerHTML = text;
+                    saveToHistory.classList.remove('hidden');
+                } else {
+                    textResult.innerHTML = 'No text found in the image 🐱';
+                }
+            }).catch(err => {
+                loader.classList.add('hidden');
+                textResult.innerHTML = 'Oopsie! Something went wrong 😿';
+                console.error(err);
+            });
+        });
+
+        saveToHistory.addEventListener('click', () => {
+            const extractedText = textResult.innerHTML;
+            extractionHistory.unshift({
+                text: extractedText,
+                timestamp: new Date().toISOString()
+            });
+            localStorage.setItem('textExtractionHistory', JSON.stringify(extractionHistory));
+            updateHistory();
+            saveToHistory.classList.add('hidden');
+            
+            const toast = document.createElement('div');
+            toast.className = 'fixed bottom-4 right-4 bg-pink-500 text-white px-6 py-3 rounded-full shadow-lg bounce-in';
+            toast.innerHTML = '✨ Saved to Memory Box! ✨';
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        });
+    </script>
+<script>document.body.addEventListener('wheel', e => { if (!e.ctrlKey) return; e.preventDefault(); return }, { passive: false })</script>
+	</body>
+</html>
